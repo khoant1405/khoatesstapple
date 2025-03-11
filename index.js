@@ -6,33 +6,57 @@ const os = require("os");
 
 const app = express();
 
-// Sử dụng thư mục tạm thời của Azure App Service hoặc thư mục gốc nếu cần
-const tempDir = process.env.WEBSITES_TEMP_DIR || os.tmpdir(); // Thư mục tạm thời (thường là /tmp)
-const fallbackDir = "/home/site/wwwroot"; // Thư mục gốc của ứng dụng trên Azure, dùng nếu /tmp không hoạt động
+// Sử dụng thư mục tạm thời của Azure App Service
+const tempDir = process.env.WEBSITES_TEMP_DIR || os.tmpdir(); // Thường là /tmp
 const uploadDir = path.join(tempDir, "uploads");
 const distributionDir = path.join(tempDir, "distribution", "ios");
 
-// Tạo thư mục uploads nếu chưa tồn tại
+// Fallback nếu /tmp không hoạt động
+const fallbackDir = "/home/site/wwwroot";
+const fallbackUploadDir = path.join(fallbackDir, "uploads");
+const fallbackDistributionDir = path.join(fallbackDir, "distribution", "ios");
+
+// Tạo thư mục uploads
+let finalUploadDir = uploadDir;
 if (!fs.existsSync(uploadDir)) {
   console.log(`Creating directory: ${uploadDir}`);
-  fs.mkdirSync(uploadDir, { recursive: true });
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  } catch (err) {
+    console.error(`Failed to create ${uploadDir}: ${err.message}`);
+    console.log(`Falling back to: ${fallbackUploadDir}`);
+    finalUploadDir = fallbackUploadDir;
+    if (!fs.existsSync(fallbackUploadDir)) {
+      fs.mkdirSync(fallbackUploadDir, { recursive: true });
+    }
+  }
 } else {
   console.log(`Directory exists: ${uploadDir}`);
 }
 
-// Tạo thư mục distribution/ios nếu chưa tồn tại
+// Tạo thư mục distribution/ios
+let finalDistributionDir = distributionDir;
 if (!fs.existsSync(distributionDir)) {
   console.log(`Creating directory: ${distributionDir}`);
-  fs.mkdirSync(distributionDir, { recursive: true });
+  try {
+    fs.mkdirSync(distributionDir, { recursive: true });
+  } catch (err) {
+    console.error(`Failed to create ${distributionDir}: ${err.message}`);
+    console.log(`Falling back to: ${fallbackDistributionDir}`);
+    finalDistributionDir = fallbackDistributionDir;
+    if (!fs.existsSync(fallbackDistributionDir)) {
+      fs.mkdirSync(fallbackDistributionDir, { recursive: true });
+    }
+  }
 } else {
   console.log(`Directory exists: ${distributionDir}`);
 }
 
-// Cấu hình Multer để lưu file vào thư mục tạm thời
+// Cấu hình Multer để lưu file
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const absUploadDir = path.resolve(uploadDir); // Sử dụng đường dẫn tuyệt đối
-    console.log(`Absolute Multer destination: ${absUploadDir}`);
+    const absUploadDir = path.resolve(finalUploadDir);
+    console.log(`Multer destination: ${absUploadDir}`);
     if (!fs.existsSync(absUploadDir)) {
       console.log(`Creating Multer destination: ${absUploadDir}`);
       fs.mkdirSync(absUploadDir, { recursive: true });
@@ -59,6 +83,9 @@ app.use((req, res, next) => {
 // 📌 API Upload file IPA trực tiếp vào server
 app.post("/upload", upload.single("ipa"), (req, res) => {
   console.log("Upload request received");
+  console.log(`Request body: ${JSON.stringify(req.body)}`);
+  console.log(`File received: ${req.file ? JSON.stringify(req.file) : "No file"}`);
+
   if (!req.file) {
     console.log("No file uploaded");
     return res.status(400).json({ error: "Không có file được tải lên" });
@@ -70,8 +97,8 @@ app.post("/upload", upload.single("ipa"), (req, res) => {
 
   const version = req.body.version;
   const fileName = `${version}.ipa`;
-  const sourcePath = path.join(uploadDir, fileName);
-  const targetPath = path.join(distributionDir, fileName);
+  const sourcePath = path.join(finalUploadDir, fileName);
+  const targetPath = path.join(finalDistributionDir, fileName);
 
   console.log(`Source path: ${sourcePath}`);
   console.log(`Target path: ${targetPath}`);
@@ -93,14 +120,14 @@ app.post("/upload", upload.single("ipa"), (req, res) => {
 
 // 📌 API Lấy danh sách file trên server
 app.get("/apps", (req, res) => {
-  if (!fs.existsSync(distributionDir)) {
-    console.log(`Directory not found: ${distributionDir}`);
+  if (!fs.existsSync(finalDistributionDir)) {
+    console.log(`Directory not found: ${finalDistributionDir}`);
     return res.json([]);
   }
 
-  fs.readdir(distributionDir, (err, files) => {
+  fs.readdir(finalDistributionDir, (err, files) => {
     if (err) {
-      console.error(`Error reading directory ${distributionDir}: ${err.message}`);
+      console.error(`Error reading directory ${finalDistributionDir}: ${err.message}`);
       return res.status(500).json({ error: "Lỗi khi liệt kê file" });
     }
     const fileList = files.map((file) => ({
@@ -160,7 +187,7 @@ app.get("/manifest.plist", (req, res) => {
 });
 
 // 📌 Serve file tĩnh từ thư mục distribution/ios trong thư mục tạm thời
-app.use("/distribution/ios", express.static(distributionDir));
+app.use("/distribution/ios", express.static(finalDistributionDir));
 
 // 📌 Thêm route mặc định để kiểm tra
 app.get("/", (req, res) => {
