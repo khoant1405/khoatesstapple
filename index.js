@@ -2,57 +2,33 @@ const express = require("express");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
-const os = require("os");
 
 const app = express();
 
-// Sử dụng thư mục tạm thời của Azure App Service
-const tempDir = process.env.WEBSITES_TEMP_DIR || os.tmpdir(); // Thường là /tmp
-const uploadDir = path.join(tempDir, "uploads");
-const distributionDir = path.join(tempDir, "distribution", "ios");
+// Sử dụng thư mục gốc của Azure App Service
+const uploadDir = path.join("/home/site/wwwroot", "uploads");
+const distributionDir = path.join("/home/site/wwwroot", "distribution", "ios");
 
-// Fallback nếu /tmp không hoạt động
-const fallbackDir = "/home/site/wwwroot";
-const fallbackUploadDir = path.join(fallbackDir, "uploads");
-const fallbackDistributionDir = path.join(fallbackDir, "distribution", "ios");
-
-// Tạo thư mục uploads
 let finalUploadDir = uploadDir;
+let finalDistributionDir = distributionDir;
+
+// Tạo thư mục uploads nếu chưa tồn tại
 if (!fs.existsSync(uploadDir)) {
   console.log(`Creating directory: ${uploadDir}`);
-  try {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  } catch (err) {
-    console.error(`Failed to create ${uploadDir}: ${err.message}`);
-    console.log(`Falling back to: ${fallbackUploadDir}`);
-    finalUploadDir = fallbackUploadDir;
-    if (!fs.existsSync(fallbackUploadDir)) {
-      fs.mkdirSync(fallbackUploadDir, { recursive: true });
-    }
-  }
+  fs.mkdirSync(uploadDir, { recursive: true });
 } else {
   console.log(`Directory exists: ${uploadDir}`);
 }
 
-// Tạo thư mục distribution/ios
-let finalDistributionDir = distributionDir;
+// Tạo thư mục distribution/ios nếu chưa tồn tại
 if (!fs.existsSync(distributionDir)) {
   console.log(`Creating directory: ${distributionDir}`);
-  try {
-    fs.mkdirSync(distributionDir, { recursive: true });
-  } catch (err) {
-    console.error(`Failed to create ${distributionDir}: ${err.message}`);
-    console.log(`Falling back to: ${fallbackDistributionDir}`);
-    finalDistributionDir = fallbackDistributionDir;
-    if (!fs.existsSync(fallbackDistributionDir)) {
-      fs.mkdirSync(fallbackDistributionDir, { recursive: true });
-    }
-  }
+  fs.mkdirSync(distributionDir, { recursive: true });
 } else {
   console.log(`Directory exists: ${distributionDir}`);
 }
 
-// Cấu hình Multer để lưu file
+// Cấu hình Multer để lưu file vào thư mục uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const absUploadDir = path.resolve(finalUploadDir);
@@ -186,7 +162,7 @@ app.get("/manifest.plist", (req, res) => {
   res.send(plistContent);
 });
 
-// 📌 Serve file tĩnh từ thư mục distribution/ios trong thư mục tạm thời
+// 📌 Serve file tĩnh từ thư mục distribution/ios
 app.use("/distribution/ios", express.static(finalDistributionDir));
 
 // 📌 Thêm route mặc định để kiểm tra
