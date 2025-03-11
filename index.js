@@ -5,7 +5,6 @@ const fs = require("fs");
 const path = require("path"); // Thêm để xử lý đường dẫn file
 
 const app = express();
-const PORT = 3000; // Chuyển sang HTTP, dùng cổng 3000 (hoặc cổng khác nếu bạn muốn)
 
 // Cấu hình Multer để lưu file trực tiếp vào thư mục trên server
 const uploadDir = "uploads"; // Thư mục lưu file
@@ -80,7 +79,7 @@ app.get("/manifest.plist", (req, res) => {
   }
 
   const ipaFileName = `${version}.ipa`;
-  const ipaUrl = `http://localhost:${PORT}/distribution/ios/${ipaFileName}`; // URL trực tiếp trên server
+  const ipaUrl = `https://khoatestapple.azurewebsites.net/distribution/ios/${ipaFileName}`; // URL trực tiếp trên server
 
   const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
