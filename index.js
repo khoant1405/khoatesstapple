@@ -116,7 +116,11 @@ app.get("/manifest.plist", (req, res) => {
 
 app.use("/distribution/ios", express.static(path.join("distribution", "ios")));
 
-const PORT = process.env.PORT || 3000;
+app.get("/", (req, res) => {
+  res.send("Hello from Azure App Service!");
+});
+
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Server chạy tại: http://localhost:${PORT}`);
 });
