@@ -1,28 +1,25 @@
 const express = require("express");
 const multer = require("multer");
-const { createProxyMiddleware } = require("http-proxy-middleware");
 const fs = require("fs");
-const path = require("path"); // Thêm để xử lý đường dẫn file
+const path = require("path");
 
 const app = express();
 
-// Cấu hình Multer để lưu file trực tiếp vào thư mục trên server
-const uploadDir = "uploads"; // Thư mục lưu file
+const uploadDir = "uploads";
 if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir); // Tạo thư mục nếu chưa tồn tại
+  fs.mkdirSync(uploadDir);
 }
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir); // Lưu file vào thư mục "uploads"
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const version = req.body.version;
-    cb(null, `${version}.ipa`); // Đặt tên file theo version
+    const version = req.body.version || "default";
+    cb(null, `${version}.ipa`);
   },
 });
 const upload = multer({ storage: storage });
 
-// Middleware CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -30,32 +27,32 @@ app.use((req, res, next) => {
   next();
 });
 
-// 📌 API Upload file IPA trực tiếp vào server
 app.post("/upload", upload.single("ipa"), (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Không có file được tải lên" });
   if (!req.body.version) return res.status(400).json({ error: "Thiếu tham số: version" });
 
   const version = req.body.version;
   const fileName = `${version}.ipa`;
-  const targetPath = `distribution/ios/${fileName}`;
+  const targetPath = path.join("distribution", "ios", fileName);
 
-  // Tạo thư mục distribution/ios nếu chưa tồn tại
-  const dir = "distribution/ios";
+  const dir = path.join("distribution", "ios");
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  // Di chuyển file từ thư mục uploads sang distribution/ios
-  fs.renameSync(req.file.path, path.join(dir, fileName));
+  try {
+    fs.renameSync(path.join(uploadDir, fileName), targetPath);
+  } catch (err) {
+    return res.status(500).json({ error: "Lỗi khi di chuyển file: " + err.message });
+  }
 
   return res.json({ message: "Upload thành công", fileName: targetPath });
 });
 
-// 📌 API Lấy danh sách file trên server
 app.get("/apps", (req, res) => {
-  const dir = "distribution/ios";
+  const dir = path.join("distribution", "ios");
   if (!fs.existsSync(dir)) {
-    return res.json([]); // Trả về mảng rỗng nếu thư mục chưa tồn tại
+    return res.json([]);
   }
 
   fs.readdir(dir, (err, files) => {
@@ -65,13 +62,12 @@ app.get("/apps", (req, res) => {
     }
     const fileList = files.map((file) => ({
       name: file,
-      path: `distribution/ios/${file}`,
+      path: path.join("/distribution/ios", file),
     }));
     res.json(fileList);
   });
 });
 
-// 📌 API Tạo `manifest.plist` để cài đặt OTA trên iOS
 app.get("/manifest.plist", (req, res) => {
   const { bundleId, version, title } = req.query;
   if (!bundleId || !version || !title) {
@@ -79,7 +75,7 @@ app.get("/manifest.plist", (req, res) => {
   }
 
   const ipaFileName = `${version}.ipa`;
-  const ipaUrl = `https://khoatestapple.azurewebsites.net/distribution/ios/${ipaFileName}`; // URL trực tiếp trên server
+  const ipaUrl = `https://khoatestapple.azurewebsites.net/distribution/ios/${ipaFileName}`;
 
   const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -118,13 +114,9 @@ app.get("/manifest.plist", (req, res) => {
   res.send(plistContent);
 });
 
-// 📌 Serve file tĩnh từ thư mục distribution/ios
-app.use("/distribution/ios", express.static("distribution/ios"));
+app.use("/distribution/ios", express.static(path.join("distribution", "ios")));
 
-// 📌 Khởi động HTTP Server
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server chạy tại: http://localhost:${PORT}`);
-  console.log(`📦 API Upload: http://localhost:${PORT}/upload`);
-  console.log(`📜 API Manifest: http://localhost:${PORT}/manifest.plist?bundleId=com.example.app&version=1.0.0&title=MyApp`);
-  console.log(`🔗 Download: http://localhost:${PORT}/distribution/ios/1.0.0.ipa`);
+  console.log(`Server chạy tại: http://localhost:${PORT}`);
 });

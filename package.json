@@ -9,10 +9,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "A Node.js application for distributing iOS IPA files",
   "dependencies": {
     "express": "^4.21.2",
-    "http-proxy-middleware": "^3.0.3",
     "multer": "^1.4.5-lts.1"
   }
 }
